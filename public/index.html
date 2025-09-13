@@ -1,11 +1,176 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    <h1>Thank you god... your love and blessings are my strength.</h1>
-</body>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Sample Photo Gallery</title>
+        <meta name="description" content="A small responsive photo gallery demo with lightbox and keyboard navigation">
+        <style>
+            :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8}
+            *{box-sizing:border-box}
+            html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(180deg,#071022 0%, #0b1724 100%);color:#e6eef6}
+            .wrap{max-width:1100px;margin:40px auto;padding:20px}
+            header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+            h1{margin:0;font-size:1.6rem}
+            p.lead{margin:4px 0 0;color:var(--muted)}
+            .controls{display:flex;gap:8px;align-items:center}
+            .search{padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+
+            /* Gallery grid */
+            .gallery{margin-top:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+            .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;overflow:hidden;position:relative;cursor:pointer;transition:transform .18s ease,box-shadow .18s ease}
+            .card:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+            .thumb{display:block;width:100%;height:140px;object-fit:cover}
+            .meta{padding:10px}
+            .caption{font-size:0.95rem;margin:0}
+            .sub{font-size:0.8rem;color:var(--muted);margin-top:6px}
+
+            /* Lightbox */
+            .lightbox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(2,6,23,0.85);z-index:60;padding:24px}
+            .lightbox.open{display:flex}
+            .lb-inner{max-width:1000px;max-height:90vh;width:100%;position:relative}
+            .lb-img{width:100%;height:70vh;object-fit:contain;border-radius:8px}
+            .lb-meta{color:var(--muted);display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+            .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px 10px;border-radius:8px;cursor:pointer}
+            .nav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.04);cursor:pointer}
+            .nav.prev{left:-16px}
+            .nav.next{right:-16px}
+            @media (max-width:480px){.thumb{height:110px}.lb-img{height:60vh}.nav{width:40px;height:40px}}
+
+            footer{margin-top:28px;color:var(--muted);font-size:0.9rem;text-align:center}
+        </style>
+    </head>
+    <body>
+        <div class="wrap">
+            <header>
+                <div>
+                    <h1>Sample Photo Gallery</h1>
+                    <p class="lead">A tiny, responsive gallery demo with a lightbox. Use arrow keys to navigate.</p>
+                </div>
+                <div class="controls">
+                    <input class="search" id="search" placeholder="Search by title..." aria-label="Search photos">
+                    <button class="btn" id="shuffle">Shuffle</button>
+                </div>
+            </header>
+
+            <section class="gallery" id="gallery" aria-live="polite"></section>
+
+            <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-hidden="true">
+                <div class="lb-inner">
+                    <button class="nav prev" id="prev" aria-label="Previous">‹</button>
+                    <img src="" alt="" class="lb-img" id="lb-img">
+                    <button class="nav next" id="next" aria-label="Next">›</button>
+                    <div class="lb-meta">
+                        <div>
+                            <div id="lb-title" style="font-weight:600"></div>
+                            <div id="lb-sub" style="font-size:.9rem;color:var(--muted)"></div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <button class="btn" id="close">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer>Images from Unsplash (randomized)</footer>
+        </div>
+
+        <script>
+            // Sample image dataset (using Unsplash source URLs)
+            const IMAGES = Array.from({length:16}).map((_,i)=>({
+                id:i+1,
+                title:["Sunset","Mountains","City","Forest","Desert","Ocean","Lake","Flowers","Bridge","Night Sky","Valley","Canyon","Street","Island","Snow","Road"][i%16]+" #"+(i+1),
+                author:["Alex","Chris","Jordan","Taylor","Riley","Sam","Morgan","Jamie"][i%8],
+                // Using Unsplash source for random images sized to thumbnails and lightbox
+                thumb:`https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?auto=format&fit=crop&w=600&q=60&ixid=photo-${i}`,
+                full:`https://source.unsplash.com/random/1600x900?sig=${i}`
+            }))
+
+            const gallery = document.getElementById('gallery')
+            const lightbox = document.getElementById('lightbox')
+            const lbImg = document.getElementById('lb-img')
+            const lbTitle = document.getElementById('lb-title')
+            const lbSub = document.getElementById('lb-sub')
+            const closeBtn = document.getElementById('close')
+            const prevBtn = document.getElementById('prev')
+            const nextBtn = document.getElementById('next')
+            const searchInput = document.getElementById('search')
+            const shuffleBtn = document.getElementById('shuffle')
+
+            let items = IMAGES.slice()
+            let currentIndex = -1
+
+            function renderGrid(list){
+                gallery.innerHTML = ''
+                list.forEach((item,i)=>{
+                    const card = document.createElement('button')
+                    card.className = 'card'
+                    card.setAttribute('data-index', i)
+                    card.onclick = ()=>openLightbox(i)
+                    card.innerHTML = `
+                        <img loading="lazy" class="thumb" src="${item.thumb}" alt="${item.title}">
+                        <div class="meta">
+                            <div class="caption">${item.title}</div>
+                            <div class="sub">by ${item.author}</div>
+                        </div>`
+                    gallery.appendChild(card)
+                })
+            }
+
+            function openLightbox(index){
+                currentIndex = index
+                const item = items[index]
+                lbImg.src = item.full
+                lbImg.alt = item.title
+                lbTitle.textContent = item.title
+                lbSub.textContent = 'by ' + item.author
+                lightbox.classList.add('open')
+                lightbox.setAttribute('aria-hidden','false')
+            }
+
+            function closeLightbox(){
+                lightbox.classList.remove('open')
+                lightbox.setAttribute('aria-hidden','true')
+                lbImg.src = ''
+                currentIndex = -1
+            }
+
+            function showNext(n=1){
+                if(currentIndex<0) return
+                currentIndex = (currentIndex + n + items.length) % items.length
+                openLightbox(currentIndex)
+            }
+
+            // Events
+            closeBtn.addEventListener('click', closeLightbox)
+            prevBtn.addEventListener('click', ()=>showNext(-1))
+            nextBtn.addEventListener('click', ()=>showNext(1))
+            lightbox.addEventListener('click', (e)=>{ if(e.target===lightbox) closeLightbox() })
+
+            // Keyboard navigation
+            document.addEventListener('keydown',(e)=>{
+                if(lightbox.classList.contains('open')){
+                    if(e.key==='Escape') closeLightbox()
+                    if(e.key==='ArrowRight') showNext(1)
+                    if(e.key==='ArrowLeft') showNext(-1)
+                }
+            })
+
+            // Search and shuffle
+            searchInput.addEventListener('input',()=>{
+                const q = searchInput.value.trim().toLowerCase()
+                const filtered = IMAGES.filter(i=>i.title.toLowerCase().includes(q) || i.author.toLowerCase().includes(q))
+                items = filtered
+                renderGrid(items)
+            })
+
+            shuffleBtn.addEventListener('click',()=>{
+                items = items.sort(()=>Math.random()-0.5)
+                renderGrid(items)
+            })
+
+            // Initial render
+            renderGrid(items)
+        </script>
+    </body>
 </html>
