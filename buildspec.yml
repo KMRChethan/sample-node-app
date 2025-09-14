@@ -1,0 +1,20 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: latest
+    commands:
+      - echo Installing source NPM dependencies...
+  pre_build:
+    commands:
+      - echo Pre-build started on `date`
+      - echo Installing source NPM dependencies...
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the project...
+  post_build:
+    commands:
+      - echo Post-build started on `date`
+      - echo Build completed on `date`
